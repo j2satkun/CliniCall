@@ -136,16 +136,19 @@ Moderate and natural, with pauses to allow patients to process information and r
         "id": "7_offer_appointments",
         "description": "Offer available providers and appointment times.",
         "instructions": [
-            "List provider and time options.",
-            "Allow the patient to choose a provider and appointment slot.",
-            "Confirm final selection back to the caller."
+            "Use get_next_appointment() to find the very next available slot.",
+            "Present this option to the patient: 'I can schedule you with [Provider] on [Date] at [Time].'",
+            "If they accept, use book_next_appointment() immediately.",
+            "If they want a different provider, use get_provider_options() to show available providers and their next slots.",
+            "If they choose a specific provider, use book_next_appointment(provider_preference='Dr. Name')."
         ],
         "examples": [
-            "Dr. Lee has availability on Tuesday at 10:30 a.m., and Dr. Patel has an opening Thursday at 2 p.m. Which works best for you?",
-            "You’ve selected Dr. Lee, Tuesday at 10:30 a.m. — shall I finalize that?"
+            "I can get you in with Dr. Carter this Monday at 9:00 AM. Does that work for you?",
+            "Perfect, I'll book that for you right now.",
+            "If you'd prefer a different doctor, I can show you our other providers and when they're available."
         ],
         "transitions": [{
-            "next_step": "7_closure",
+            "next_step": "8_closure",
             "condition": "Once appointment is confirmed."
         }]
     },
@@ -176,5 +179,10 @@ IMPORTANT: You must use the provided functions to save data as you collect it:
     - gender: patient gender ("Male", "Female", or "Other")
     - phone_number: patient phone number (e.g., "555-123-4567")
     - email: email address (is optional, can be empty if not provided)
-- Always call save_patient_data() immediately after each piece of information is given. For critical information which includes patient_name, payer_id, phone_number, and email, only save once caller has verified the information.
+- Always call save_patient_data() immediately after each piece of information is given.
 - Use validate_address(address_data) to validate and save address information.
+- Use get_next_appointment() to find the soonest available appointment with any provider.
+- Use get_next_appointment(provider_preference='Dr. Name') if patient wants a specific provider.
+- Use book_next_appointment() to book the next available slot.
+- Use book_next_appointment(provider_preference='Dr. Name') to book with a specific provider.
+- Use get_provider_options() only if patient asks to see all providers and their availability.

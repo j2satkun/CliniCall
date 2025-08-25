@@ -1,5 +1,8 @@
 # LiveKit Agent implementation
+from datetime import datetime, timedelta
+import json
 import logging
+from typing import List, Dict, Any
 from typing_extensions import TypedDict
 
 from dotenv import load_dotenv
@@ -35,7 +38,9 @@ class AddressData(TypedDict):
 
 class HealthcareAgent(Agent):
     def __init__(
-        self, prompt_file_path: str = "src/healthcare_intake_prompt.md"
+        self,
+        prompt_file_path: str = "src/healthcare_intake_prompt.md",
+        providers_file_path: str = "providers.json",
     ) -> None:
         with open(prompt_file_path, "r", encoding="utf-8") as file:
             instructions = file.read().strip()
@@ -46,9 +51,122 @@ class HealthcareAgent(Agent):
 
         self.address_validator = AddressValidator()
 
+        with open(providers_file_path, "r", encoding="utf-8") as f:
+            self.providers = json.load(f)
+
     def set_session_id(self, session_id: str):
         self.session_id = session_id
         self.session_data = {"session_id": session_id}
+
+    def _find_next_available_slot(self, provider_name: str = None) -> Dict[str, Any]:
+        """Find the next available appointment slot within a week"""
+        today = datetime.now()
+
+        providers_to_check = self.providers
+        if provider_name:
+            providers_to_check = [
+                p for p in self.providers if provider_name.lower() in p["name"].lower()
+            ]
+
+        for i in range(1, 8):
+            date = today + timedelta(days=i)
+            day_name = date.strftime("%A")
+
+            for provider in providers_to_check:
+                for schedule_item in provider["schedule"]:
+                    if schedule_item["day"] == day_name:
+                        return {
+                            "provider": provider["name"],
+                            "date": date.strftime("%Y-%m-%d"),
+                            "time": schedule_item["start"],
+                            "day_of_week": day_name,
+                            "formatted_date": date.strftime("%B %d, %Y"),
+                            "formatted_time": datetime.strptime(
+                                schedule_item["start"], "%H:%M"
+                            ).strftime("%I:%M %p"),
+                        }
+
+        return None
+
+    @function_tool()
+    async def get_next_appointment(
+        self, provider_preference: str = ""
+    ) -> Dict[str, Any]:
+        """Get the next available appointment, optionally for a specific provider"""
+        try:
+            next_slot = self._find_next_available_slot(
+                provider_preference if provider_preference else None
+            )
+
+            if not next_slot:
+                return {
+                    "success": False,
+                    "message": "No appointments available in the next week",
+                }
+
+            return {
+                "success": True,
+                "appointment": next_slot,
+                "message": f"Next available: {next_slot['provider']} on {next_slot['formatted_date']} at {next_slot['formatted_time']}",
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting next appointment: {e}")
+            return {
+                "success": False,
+                "message": f"Error finding appointments: {str(e)}",
+            }
+
+    @function_tool()
+    async def book_next_appointment(
+        self, provider_preference: str = ""
+    ) -> Dict[str, Any]:
+        """Book the next available appointment"""
+        try:
+            next_slot = self._find_next_available_slot(
+                provider_preference if provider_preference else None
+            )
+
+            if not next_slot:
+                return {"success": False, "message": "No appointments available"}
+
+            await self.save_patient_data("appointment_provider", next_slot["provider"])
+            await self.save_patient_data("appointment_date", next_slot["date"])
+            await self.save_patient_data("appointment_time", next_slot["time"])
+
+            return {
+                "success": True,
+                "appointment": next_slot,
+                "message": f"Booked with {next_slot['provider']} on {next_slot['formatted_date']} at {next_slot['formatted_time']}",
+            }
+
+        except Exception as e:
+            logger.error(f"Error booking appointment: {e}")
+            return {"success": False, "message": f"Error booking appointment: {str(e)}"}
+
+    @function_tool()
+    async def get_provider_options(self) -> Dict[str, Any]:
+        """Get list of available providers"""
+        try:
+            provider_list = []
+            for provider in self.providers:
+                next_slot = self._find_next_available_slot(provider["name"])
+                if next_slot:
+                    provider_list.append(
+                        {
+                            "name": provider["name"],
+                            "next_available": f"{next_slot['formatted_date']} at {next_slot['formatted_time']}",
+                        }
+                    )
+
+            return {"success": True, "providers": provider_list}
+
+        except Exception as e:
+            logger.error(f"Error getting providers: {e}")
+            return {
+                "success": False,
+                "message": f"Error getting provider list: {str(e)}",
+            }
 
     @function_tool()
     async def save_patient_data(self, field_name: str, field_value: str) -> dict:
@@ -126,8 +244,6 @@ async def entrypoint(ctx: agents.JobContext):
     await session.generate_reply(
         instructions=f"Greet the user and begin the healthcare intake process. Your session ID is {session_id}."
     )
-
-    logger.info(f"Session {session_id} started, waiting for completion...")
 
 
 if __name__ == "__main__":
