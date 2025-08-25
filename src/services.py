@@ -5,6 +5,8 @@ import os
 from typing import Tuple, Dict, Optional
 
 import aiohttp
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 
 
 class AddressValidator:
@@ -59,3 +61,43 @@ class AddressValidator:
         except Exception as e:
             logging.error(f"Address validation error: {e}")
             return False, None
+
+
+class EmailService:
+    def __init__(self):
+        self.api_key = os.getenv("SENDGRID_API_KEY")
+        self.from_email = os.getenv("FROM_EMAIL")
+
+        try:
+            self.sg = SendGridAPIClient(api_key=self.api_key) if self.api_key else None
+        except Exception as e:
+            logging.error(f"SendGrid initialization error: {e}")
+            self.sg = None
+
+    async def send_confirmation_email(
+        self, to_email: str, subject: str, html_content: str
+    ) -> bool:
+        try:
+            if not self.sg:
+                logging.error("SendGrid not initialized - check API key")
+                return False
+
+            message = Mail(
+                from_email=self.from_email,
+                to_emails=to_email,
+                subject=subject,
+                html_content=html_content,
+            )
+
+            response = self.sg.send(message)
+
+            if response.status_code in [200, 201, 202]:
+                logging.info(f"Confirmation email sent successfully to {to_email}")
+                return True
+            else:
+                logging.error(f"SendGrid API error: {response.status_code}")
+                return False
+
+        except Exception as e:
+            logging.error(f"Email sending error: {e}")
+            return False

@@ -18,7 +18,7 @@ from livekit.plugins import (
 )
 from livekit.plugins.turn_detector.english import EnglishModel
 
-from services import AddressValidator
+from services import AddressValidator, EmailService
 
 load_dotenv()
 
@@ -50,6 +50,7 @@ class HealthcareAgent(Agent):
         self.session_data = {}
 
         self.address_validator = AddressValidator()
+        self.email_service = EmailService()
 
         with open(providers_file_path, "r", encoding="utf-8") as f:
             self.providers = json.load(f)
@@ -117,6 +118,86 @@ class HealthcareAgent(Agent):
                 "message": f"Error finding appointments: {str(e)}",
             }
 
+    async def _send_appointment_confirmation(self, to_email: str, appointment: Dict[str, Any]) -> None:
+        """Send appointment confirmation email"""
+        try:
+            # summary of intake information
+            patient_name = self.session_data.get("patient_name", "Patient")
+            payer_name = self.session_data.get("payer_name", "Not provided")
+            payer_id = self.session_data.get("payer_id", "Not provided")
+            complaint = self.session_data.get("complaint", "Not provided")
+            age = self.session_data.get("age", "Not provided")
+            gender = self.session_data.get("gender", "Not provided")
+            phone = self.session_data.get("phone_number", "Not provided")
+            email = self.session_data.get("email", "Not provided")
+            address_line1 = self.session_data.get("address_line1", "")
+            address_line2 = self.session_data.get("address_line2", "")
+            city = self.session_data.get("city", "")
+            state = self.session_data.get("state", "")
+            zip_code = self.session_data.get("zip_code", "")
+            
+            full_address = f"{address_line1}"
+            if address_line2:
+                full_address += f", {address_line2}"
+            if city or state or zip_code:
+                full_address += f", {city}, {state} {zip_code}"
+            if not full_address.strip(","):
+                full_address = "Not provided"
+            
+            subject = "Appointment Confirmation"
+            
+            html_content = f"""
+            <html>
+            <body>
+                <h2>Appointment Confirmed</h2>
+                <p>Dear {patient_name},</p>
+                
+                <p>Your appointment has been confirmed with the following details:</p>
+                
+                <p><strong>Provider:</strong> {appointment['provider']}</p>
+                <p><strong>Date:</strong> {appointment['formatted_date']}</p>
+                <p><strong>Time:</strong> {appointment['formatted_time']}</p>
+
+                <p><strong>Intake Information Summary:</strong></p>
+                <ul>
+                    <li>Patient: {patient_name}</li>
+                    <li>Age: {age}</li>
+                    <li>Gender: {gender}</li>
+                    <li>Phone: {phone}</li>
+                    <li>Email: {email}</li>
+                    <li>Address: {full_address}</li>
+                    <li>Insurance Provider: {payer_name}</li>
+                    <li>Member ID: {payer_id}</li>
+                    <li>Reason for Visit: {complaint}</li>
+                </ul>
+                
+                <p><strong>Important Reminders:</strong></p>
+                <ul>
+                    <li>Please arrive 15 minutes early for check-in.</li>
+                    <li>Bring a valid photo ID and your insurance card.</li>
+                    <li>If you need to reschedule or cancel, please call us as soon as possible.</li>
+                    <li>Please review the information above and contact us if any corrections are needed.</li>
+                </ul>
+                
+                <p>We look forward to seeing you!</p>
+                    
+                <p>Best regards,<br>Healthcare Team @ Clara TherapAI</p>
+            </body>
+            </html>
+            """
+            
+            email_sent = await self.email_service.send_confirmation_email(
+                to_email, subject, html_content
+            )
+            
+            if email_sent:
+                logger.info(f"Confirmation email sent to {to_email}")
+            else:
+                logger.warning(f"Failed to send confirmation email to {to_email}")
+                
+        except Exception as e:
+            logger.error(f"Error sending confirmation email: {e}")
+
     @function_tool()
     async def book_next_appointment(
         self, provider_preference: str = ""
@@ -133,6 +214,9 @@ class HealthcareAgent(Agent):
             await self.save_patient_data("appointment_provider", next_slot["provider"])
             await self.save_patient_data("appointment_date", next_slot["date"])
             await self.save_patient_data("appointment_time", next_slot["time"])
+
+            patient_email = "j2satkun@uwaterloo.ca"
+            await self._send_appointment_confirmation(patient_email, next_slot)
 
             return {
                 "success": True,
