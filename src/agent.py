@@ -118,7 +118,9 @@ class HealthcareAgent(Agent):
                 "message": f"Error finding appointments: {str(e)}",
             }
 
-    async def _send_appointment_confirmation(self, to_email: str, appointment: Dict[str, Any]) -> None:
+    async def _send_appointment_confirmation(
+        self, to_email: str, appointment: Dict[str, Any]
+    ) -> None:
         """Send appointment confirmation email"""
         try:
             # summary of intake information
@@ -135,7 +137,7 @@ class HealthcareAgent(Agent):
             city = self.session_data.get("city", "")
             state = self.session_data.get("state", "")
             zip_code = self.session_data.get("zip_code", "")
-            
+
             full_address = f"{address_line1}"
             if address_line2:
                 full_address += f", {address_line2}"
@@ -143,9 +145,9 @@ class HealthcareAgent(Agent):
                 full_address += f", {city}, {state} {zip_code}"
             if not full_address.strip(","):
                 full_address = "Not provided"
-            
+
             subject = "Appointment Confirmation"
-            
+
             html_content = f"""
             <html>
             <body>
@@ -185,16 +187,16 @@ class HealthcareAgent(Agent):
             </body>
             </html>
             """
-            
+
             email_sent = await self.email_service.send_confirmation_email(
                 to_email, subject, html_content
             )
-            
+
             if email_sent:
                 logger.info(f"Confirmation email sent to {to_email}")
             else:
                 logger.warning(f"Failed to send confirmation email to {to_email}")
-                
+
         except Exception as e:
             logger.error(f"Error sending confirmation email: {e}")
 
@@ -331,4 +333,8 @@ async def entrypoint(ctx: agents.JobContext):
 
 
 if __name__ == "__main__":
-    agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint))
+    agents.cli.run_app(
+        agents.WorkerOptions(
+            entrypoint_fnc=entrypoint, agent_name="telephony-healthcare-agent"
+        )
+    )
