@@ -75,7 +75,7 @@ class EmailService:
             self.sg = None
 
     async def send_confirmation_email(
-        self, to_email: str, subject: str, html_content: str
+        self, to_emails: list[str], subject: str, html_content: str
     ) -> bool:
         try:
             if not self.sg:
@@ -84,7 +84,7 @@ class EmailService:
 
             message = Mail(
                 from_email=self.from_email,
-                to_emails=to_email,
+                to_emails=to_emails,
                 subject=subject,
                 html_content=html_content,
             )
@@ -92,7 +92,7 @@ class EmailService:
             response = self.sg.send(message)
 
             if response.status_code in [200, 201, 202]:
-                logging.info(f"Confirmation email sent successfully to {to_email}")
+                logging.info(f"Confirmation email sent successfully to {to_emails}")
                 return True
             else:
                 logging.error(f"SendGrid API error: {response.status_code}")

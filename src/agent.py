@@ -41,6 +41,7 @@ class HealthcareAgent(Agent):
         self,
         prompt_file_path: str = "src/healthcare_intake_prompt.md",
         providers_file_path: str = "providers.json",
+        confirmation_emails_file_path: str = "appointment_confirmation_recipients.json",
     ) -> None:
         with open(prompt_file_path, "r", encoding="utf-8") as file:
             instructions = file.read().strip()
@@ -54,6 +55,9 @@ class HealthcareAgent(Agent):
 
         with open(providers_file_path, "r", encoding="utf-8") as f:
             self.providers = json.load(f)
+
+        with open(confirmation_emails_file_path, "r", encoding="utf-8") as f:
+            self.confirmation_emails = json.load(f)
 
     def set_session_id(self, session_id: str):
         self.session_id = session_id
@@ -118,9 +122,7 @@ class HealthcareAgent(Agent):
                 "message": f"Error finding appointments: {str(e)}",
             }
 
-    async def _send_appointment_confirmation(
-        self, to_email: str, appointment: Dict[str, Any]
-    ) -> None:
+    async def _send_appointment_confirmation(self, appointment: Dict[str, Any]) -> None:
         """Send appointment confirmation email"""
         try:
             # summary of intake information
@@ -189,13 +191,15 @@ class HealthcareAgent(Agent):
             """
 
             email_sent = await self.email_service.send_confirmation_email(
-                to_email, subject, html_content
+                self.confirmation_emails, subject, html_content
             )
 
             if email_sent:
-                logger.info(f"Confirmation email sent to {to_email}")
+                logger.info(f"Confirmation email sent to {self.confirmation_emails}")
             else:
-                logger.warning(f"Failed to send confirmation email to {to_email}")
+                logger.warning(
+                    f"Failed to send confirmation email to {self.confirmation_emails}"
+                )
 
         except Exception as e:
             logger.error(f"Error sending confirmation email: {e}")
@@ -217,8 +221,7 @@ class HealthcareAgent(Agent):
             await self.save_patient_data("appointment_date", next_slot["date"])
             await self.save_patient_data("appointment_time", next_slot["time"])
 
-            patient_email = "j2satkun@uwaterloo.ca"
-            await self._send_appointment_confirmation(patient_email, next_slot)
+            await self._send_appointment_confirmation(next_slot)
 
             return {
                 "success": True,
