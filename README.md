@@ -1,4 +1,4 @@
-# assort-healthcare-voice-agent
+# CliniCall
 A Python-based AI agent that collects patient information, schedules appointments with healthcare providers, and sends confirmation emails. Designed for telephony integration with natural language voice interactions.
 
 ## Features
